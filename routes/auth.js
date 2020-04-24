@@ -1,11 +1,12 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
+const getTokens = require('helpers/get-tokens');
 const passport = require('passport');
 const tokenList = {};
 const passportJWT = require('passport-jwt');
 const { User } = require('models');
 const {
-  jwt: { accessExpiresIn, refreshExpiresIn, tokenSecret },
+  jwt: { tokenSecret },
 } = require('config');
 const router = express.Router();
 
@@ -14,9 +15,6 @@ let JwtStrategy = passportJWT.Strategy;
 let jwtOptions = {};
 jwtOptions.jwtFromRequest = ExtractJwt.fromAuthHeaderAsBearerToken();
 jwtOptions.secretOrKey = 'wowwow';
-jwtOptions.jsonWebTokenOptions = {
-  expiresIn: '2 days',
-};
 let strategy = new JwtStrategy(jwtOptions, (jwt_payload, next) => {
   console.log('payload received', jwt_payload);
   let user = User.findOne({
@@ -38,29 +36,25 @@ router.post('/register', async (req, res) => {
 
 router.post('/refresh', (req, res) => {
   // refresh the damn token
-  const postData = req.body;
-  // if refresh token exists
-  if (postData.refreshToken && postData.refreshToken in tokenList) {
-    const user = {
-      email: postData.email,
-      name: postData.name,
-    };
-    jwt.verify(postData.refreshToken, tokenSecret, function(err, decoded) {
+  const { refreshToken: oldRefreshToken } = req.body;
+  let userId;
+  if (oldRefreshToken && oldRefreshToken in tokenList) {
+    jwt.verify(oldRefreshToken, tokenSecret, function(err, decoded) {
       if (err) {
         return res
           .status(401)
           .json({ error: true, message: 'Unauthorized access.' });
       }
-      req.decoded = decoded;
+      userId = decoded.id;
     });
-    const token = jwt.sign(user, config.secret, {
-      expiresIn: config.tokenLife,
-    });
+    const payload = { id: userId };
+    const { token, refreshToken } = getTokens(payload);
     const response = {
       token: token,
+      refreshToken: refreshToken,
     };
-    // update the token in the list
-    tokenList[postData.refreshToken] = token;
+    delete tokenList[oldRefreshToken];
+    tokenList[refreshToken] = token;
     res.status(200).json(response);
   } else {
     res.status(404).send('Invalid request');
@@ -78,20 +72,13 @@ router.post('/login', async (req, res) => {
     }
     if (user.password === password) {
       let payload = { id: user.id };
-      const token = jwt.sign(payload, tokenSecret, {
-        expiresIn: accessExpiresIn,
-      });
-      const refreshToken = jwt.sign(payload, tokenSecret, {
-        expiresIn: refreshExpiresIn,
-      });
+      const { token, refreshToken } = getTokens(payload);
       const response = {
-        status: 'Logged in',
         token: token,
         refreshToken: refreshToken,
       };
       tokenList[refreshToken] = token;
-      res.status(200).json(response);
-      return res.json({ msg: 'ok', token: token });
+      return res.status(200).json(response);
     } else {
       return res.status(401).json({ msg: 'Password is incorrect' });
     }
