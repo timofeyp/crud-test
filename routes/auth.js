@@ -6,7 +6,7 @@ const passportJWT = require('passport-jwt');
 const { User } = require('models');
 const {
   jwt: { accessExpiresIn, refreshExpiresIn, tokenSecret },
-} = require('config/config.json');
+} = require('config');
 const router = express.Router();
 
 let ExtractJwt = passportJWT.ExtractJwt;
@@ -60,7 +60,7 @@ router.post('/refresh', (req, res) => {
       token: token,
     };
     // update the token in the list
-    tokenList[postData.refreshToken].token = token;
+    tokenList[postData.refreshToken] = token;
     res.status(200).json(response);
   } else {
     res.status(404).send('Invalid request');
@@ -89,7 +89,7 @@ router.post('/login', async (req, res) => {
         token: token,
         refreshToken: refreshToken,
       };
-      tokenList[refreshToken] = response;
+      tokenList[refreshToken] = token;
       res.status(200).json(response);
       return res.json({ msg: 'ok', token: token });
     } else {
