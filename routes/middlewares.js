@@ -1,25 +1,25 @@
 const jwt = require('jsonwebtoken');
-const config = require('config');
+const {
+  jwt: { tokenSecret },
+} = require('config');
+const checkTimestamp = require('helpers/check-time-stamp');
 
 const checkToken = (req, res, next) => {
   const token =
-    req.body.token || req.query.token || req.headers['Authorization'];
-  // decode token
+    req.body.token || req.query.token || req.headers['authorization'];
   if (token) {
-    // verifies secret and checks exp
-    jwt.verify(token, config.secret, function(err, decoded) {
+    jwt.verify(token, tokenSecret, function(err, decoded) {
       if (err) {
         return res
-          .status(401)
+          .sendStatus(401)
           .json({ error: true, message: 'Unauthorized access.' });
       }
+      checkTimestamp(decoded.exp, res);
       req.decoded = decoded;
       next();
     });
   } else {
-    // if there is no token
-    // return an error
-    return res.status(403).send({
+    return res.sendStatus(403).send({
       error: true,
       message: 'No token provided.',
     });
